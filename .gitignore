@@ -33,6 +33,7 @@ env/
 
 # Data (large files - dataset is downloaded via script)
 data/
+datasets/
 !data/.gitkeep
 
 # Trained models (too large for GitHub, 645MB total)

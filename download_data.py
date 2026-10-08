@@ -1,178 +1,300 @@
 import os
-import shutil
 import random
+import shutil
 import zipfile
 from pathlib import Path
+from typing import Dict, List, Optional
 from urllib.request import urlretrieve
 
+import kagglehub
 
-def download_trashnet():
-    """Download TrashNet dataset from GitHub."""
-    print("Downloading TrashNet dataset...")
+# --------------------------------------------------------------------------- #
+# Configuration
+# --------------------------------------------------------------------------- #
 
-    url = "https://github.com/garythung/trashnet/raw/master/data/dataset-resized.zip"
-    zip_path = "trashnet_data.zip"
+# Where raw downloads / extracted archives are stored
+OUTPUT = "./datasets"
 
-    def reporthook(count, block_size, total_size):
-        if total_size > 0:
-            percent = int(count * block_size * 100 / total_size)
-            print(f"\rDownloading: {percent}%", end="", flush=True)
+# Where the final train/val/test structure is written
+SPLIT_OUTPUT = "./data"
 
-    urlretrieve(url, zip_path, reporthook)
-    print("\n✓ Download complete!")
+# Kaggle dataset handles ("owner/dataset-name")
+KAGGLE_DATASETS = [
+    "joebeachcapital/realwaste",
+    "sumn2u/garbage-classification-v2",
+]
 
-    return zip_path
+# Direct links to .zip archives
+REMOTE_DATASETS = [
+    "https://github.com/garythung/trashnet/raw/master/data/dataset-resized.zip",
+]
+
+# Which class folders to keep, and what to call them in the final dataset.
+#   key   = source folder name, normalised (lower-case, spaces -> underscores)
+#   value = class name used in data/<split>/<value>/
+# Folders NOT listed here are skipped. Several keys may point to the same
+# value to merge classes. Leave the dict empty ({}) to keep every folder.
+CLASS_MAP: Dict[str, str] = {
+    "cardboard": "cardboard",
+    "glass": "glass",
+    "metal": "metal",
+    "paper": "paper",
+    "plastic": "plastic",
+    "trash": "trash",
+#    "food_organics": "organic",   # example of renaming
+#    "vegetation": "organic",      # example of merging into one class
+}
+
+# File types treated as images when splitting
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png"}
 
 
-def split_dataset(source_dir, output_dir="data", train_ratio=0.7, val_ratio=0.15):
+# --------------------------------------------------------------------------- #
+# Downloading
+# --------------------------------------------------------------------------- #
+
+def download_kaggle_datasets(kaggle_datasets: List[str]) -> List[Path]:
     """
-    Split dataset into train/val/test sets.
+    Download datasets from Kaggle using kagglehub.
+
+    Each dataset is stored in its own sub-folder of OUTPUT.
+    Requires Kaggle credentials (~/.kaggle/kaggle.json or env variables).
+
+    Returns:
+        List of local directories, one per dataset.
+    """
+    paths = []
+    for dataset in kaggle_datasets:
+        print(f"Downloading Kaggle dataset: {dataset}")
+        target = Path(OUTPUT) / dataset.split("/")[-1]
+        kagglehub.dataset_download(handle=dataset, output_dir=str(target))
+        paths.append(target)
+
+    print("\n✓ Downloaded all Kaggle datasets")
+    return paths
+
+
+def _reporthook(count: int, block_size: int, total_size: int) -> None:
+    """Progress callback for urlretrieve: prints a live percentage."""
+    if total_size > 0:
+        percent = min(100, int(count * block_size * 100 / total_size))
+        print(f"\rDownloading: {percent}%", end="", flush=True)
+
+
+def download_remote_datasets(remote_datasets: List[str]) -> List[Path]:
+    """
+    Download zip archives from direct URLs and extract them.
+
+    Each archive is extracted into OUTPUT/<archive-name>/ and the .zip file
+    is deleted afterwards.
+
+    Returns:
+        List of extraction directories, one per archive.
+    """
+    os.makedirs(OUTPUT, exist_ok=True)
+    paths = []
+
+    for dataset_url in remote_datasets:
+        file_name = dataset_url.split("/")[-1]
+        zip_path = Path(OUTPUT) / file_name
+        extract_dir = Path(OUTPUT) / zip_path.stem
+
+        print(f"Downloading: {dataset_url}")
+        urlretrieve(dataset_url, zip_path, _reporthook)
+        print("\n✓ Download complete!")
+
+        print("Extracting archive...")
+        with zipfile.ZipFile(zip_path, "r") as zip_ref:
+            zip_ref.extractall(extract_dir)
+        os.remove(zip_path)  # the archive is no longer needed
+        print("✓ Extraction complete!")
+
+        paths.append(extract_dir)
+
+    return paths
+
+
+# --------------------------------------------------------------------------- #
+# Dataset discovery & splitting
+# --------------------------------------------------------------------------- #
+
+def _list_images(folder: Path) -> List[Path]:
+    """Return all image files directly inside `folder` (case-insensitive)."""
+    return [
+        f for f in folder.iterdir()
+        if f.is_file() and f.suffix.lower() in IMAGE_EXTENSIONS
+    ]
+
+
+def find_class_root(dataset_dir: Path) -> Optional[Path]:
+    """
+    Find the directory that contains the class folders.
+
+    Downloaded archives often nest the real data several levels deep
+    (e.g. `dataset-resized/dataset-resized/glass/*.jpg`), so we walk the tree
+    and return the shallowest folder that has at least two sub-folders which
+    directly contain images.
+    """
+    candidates = [dataset_dir] + sorted(p for p in dataset_dir.rglob("*") if p.is_dir())
+
+    for candidate in candidates:
+        class_folders = [
+            d for d in candidate.iterdir()
+            if d.is_dir() and _list_images(d)
+        ]
+        if len(class_folders) >= 2:
+            return candidate
+
+    return None
+
+
+def split_dataset(
+    source_dir: Path,
+    output_dir: str = SPLIT_OUTPUT,
+    train_ratio: float = 0.7,
+    val_ratio: float = 0.15,
+) -> None:
+    """
+    Split a dataset into train/val/test sets.
+
+    The test ratio is whatever is left: 1 - train_ratio - val_ratio.
+    Class folder names are normalised (lower-case, spaces -> underscores) so
+    that e.g. "Glass" and "glass" from different datasets end up in the same
+    class. Filenames are prefixed with the dataset name to avoid collisions.
 
     Args:
-        source_dir: Directory containing class folders
-        output_dir: Output directory for train/val/test splits
-        train_ratio: Proportion for training set (default 0.7)
-        val_ratio: Proportion for validation set (default 0.15)
-        test_ratio is automatically 1 - train_ratio - val_ratio
+        source_dir:  Directory containing one folder per class.
+        output_dir:  Destination root for the train/val/test folders.
+        train_ratio: Proportion of images used for training.
+        val_ratio:   Proportion of images used for validation.
     """
-    print(f"\nSplitting dataset into train/val/test...")
+    source_dir = Path(source_dir)
+    dataset_name = source_dir.parent.name if source_dir.name == "" else source_dir.name
+    print(f"\nSplitting '{dataset_name}' into train/val/test...")
 
-    splits = ["train", "val", "test"]
-    for split in splits:
+    for split in ("train", "val", "test"):
         os.makedirs(os.path.join(output_dir, split), exist_ok=True)
 
-    class_dirs = [d for d in Path(source_dir).iterdir() if d.is_dir()]
+    class_dirs = [d for d in source_dir.iterdir() if d.is_dir()]
 
     for class_dir in class_dirs:
-        class_name = class_dir.name
-        print(f"  Processing class: {class_name}")
+        class_name = class_dir.name.strip().lower().replace(" ", "_")
 
-        images = list(class_dir.glob("*.jpg")) + list(class_dir.glob("*.png"))
+        # Keep only the requested classes (and rename them if mapped)
+        if CLASS_MAP:
+            if class_name not in CLASS_MAP:
+                print(f"  {class_name}: skipped (not in CLASS_MAP)")
+                continue
+            class_name = CLASS_MAP[class_name]
+
+        images = _list_images(class_dir)
+        if not images:
+            continue  # skip folders without images
         random.shuffle(images)
 
+        # Compute cut points for the three splits
         total = len(images)
         train_end = int(total * train_ratio)
         val_end = train_end + int(total * val_ratio)
 
-        train_images = images[:train_end]
-        val_images = images[train_end:val_end]
-        test_images = images[val_end:]
+        splits = {
+            "train": images[:train_end],
+            "val": images[train_end:val_end],
+            "test": images[val_end:],
+        }
 
         print(
-            f"    Train: {len(train_images)}, Val: {len(val_images)}, Test: {len(test_images)}"
+            f"  {class_name}: "
+            f"train={len(splits['train'])}, "
+            f"val={len(splits['val'])}, "
+            f"test={len(splits['test'])}"
         )
 
-        for split, split_images in [
-            ("train", train_images),
-            ("val", val_images),
-            ("test", test_images),
-        ]:
+        # Copy the files into data/<split>/<class>/
+        for split, split_images in splits.items():
             split_class_dir = os.path.join(output_dir, split, class_name)
             os.makedirs(split_class_dir, exist_ok=True)
 
             for img_path in split_images:
-                shutil.copy2(img_path, os.path.join(split_class_dir, img_path.name))
+                new_name = f"{dataset_name}_{img_path.name}"
+                shutil.copy2(img_path, os.path.join(split_class_dir, new_name))
 
     print("✓ Dataset split complete!")
 
 
-def main():
+# --------------------------------------------------------------------------- #
+# Entry point
+# --------------------------------------------------------------------------- #
+
+def main() -> None:
     print("=" * 60)
-    print("TrashNet Dataset Preparation")
+    print("Waste Dataset Preparation")
     print("=" * 60)
 
-    if os.path.exists("data") and any(os.listdir("data")):
-        response = input("\n'data' directory already exists. Overwrite? (y/N): ")
+    # Protect existing results from being overwritten by accident
+    if os.path.exists(SPLIT_OUTPUT) and any(os.listdir(SPLIT_OUTPUT)):
+        response = input(f"\n'{SPLIT_OUTPUT}' already exists. Overwrite? (y/N): ")
         if response.lower() != "y":
             print("Aborted.")
             return
-        shutil.rmtree("data")
+        shutil.rmtree(SPLIT_OUTPUT)
 
     print("\nOptions:")
-    print("  1. Download dataset from GitHub (recommended)")
-    print("  2. I already have the dataset downloaded")
-
+    print("  1. Download datasets (Kaggle + remote)  (recommended)")
+    print("  2. I already have a dataset downloaded")
     choice = input("\nChoose option (1 or 2): ").strip()
 
     if choice == "1":
         try:
-            zip_path = download_trashnet()
-
-            print("\nExtracting dataset...")
-            with zipfile.ZipFile(zip_path, "r") as zip_ref:
-                zip_ref.extractall("temp_trashnet")
-            print("✓ Extraction complete!")
-
-            temp_dir = Path("temp_trashnet")
-            dataset_dirs = list(temp_dir.rglob("*"))
-
-            source_dir = None
-            for d in dataset_dirs:
-                if d.is_dir() and any(
-                    c.name
-                    in ["cardboard", "glass", "metal", "paper", "plastic", "trash"]
-                    for c in d.iterdir()
-                    if c.is_dir()
-                ):
-                    source_dir = d
-                    break
-
-            if source_dir is None:
-                possible_paths = [
-                    temp_dir / "dataset-resized",
-                    temp_dir / "data" / "dataset-resized",
-                    temp_dir,
-                ]
-                for path in possible_paths:
-                    if path.exists():
-                        source_dir = path
-                        break
-
-            if source_dir is None:
-                print(
-                    "\n❌ Could not find dataset classes. Please check the downloaded files."
-                )
-                return
-
-            split_dataset(source_dir)
-
-            print("\nCleaning up temporary files...")
-            os.remove(zip_path)
-            shutil.rmtree("temp_trashnet")
-
+            dataset_dirs = download_kaggle_datasets(KAGGLE_DATASETS)
+            dataset_dirs += download_remote_datasets(REMOTE_DATASETS)
         except Exception as e:
             print(f"\n❌ Error: {e}")
-            print("\nIf download failed, you can:")
-            print("  1. Manually download from: https://github.com/garythung/trashnet")
+            print("\nIf the download failed, you can:")
+            print("  1. Download the datasets manually")
             print("  2. Run this script again and choose option 2")
             return
 
+        # Locate the class folders of each dataset and split them
+        for dataset_dir in dataset_dirs:
+            class_root = find_class_root(dataset_dir)
+            if class_root is None:
+                print(f"\n⚠ Could not find class folders in {dataset_dir}, skipping.")
+                continue
+            split_dataset(class_root)
+
     elif choice == "2":
-        dataset_path = input("\nEnter path to dataset directory: ").strip()
-        if not os.path.exists(dataset_path):
+        dataset_path = Path(input("\nEnter path to dataset directory: ").strip())
+        if not dataset_path.exists():
             print(f"❌ Path not found: {dataset_path}")
             return
 
-        split_dataset(dataset_path)
+        class_root = find_class_root(dataset_path)
+        if class_root is None:
+            print(f"❌ No class folders with images found in {dataset_path}")
+            return
+        split_dataset(class_root)
 
     else:
         print("Invalid choice. Aborted.")
         return
 
+    # Summary
     print("\n" + "=" * 60)
     print("Dataset Ready!")
     print("=" * 60)
-    print(f"\nData directory structure:")
-    print(f"  data/")
-    print(f"  ├── train/")
-    print(f"  ├── val/")
-    print(f"  └── test/")
+    print("\nData directory structure:")
+    print(f"  {SPLIT_OUTPUT}/")
+    print("  ├── train/")
+    print("  ├── val/")
+    print("  └── test/")
 
-    for split in ["train", "val", "test"]:
-        split_path = Path("data") / split
+    for split in ("train", "val", "test"):
+        split_path = Path(SPLIT_OUTPUT) / split
         if split_path.exists():
-            total = sum(1 for _ in split_path.rglob("*.jpg")) + sum(
-                1 for _ in split_path.rglob("*.png")
+            total = sum(
+                1 for f in split_path.rglob("*")
+                if f.suffix.lower() in IMAGE_EXTENSIONS
             )
             print(f"\n{split.capitalize()}: {total} images")
 
@@ -180,5 +302,5 @@ def main():
 
 
 if __name__ == "__main__":
-    random.seed(42)
+    random.seed(42)  # reproducible splits
     main()
