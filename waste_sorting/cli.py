@@ -1,4 +1,5 @@
 """Entry point. The ONLY module that wires the others together."""
+
 from __future__ import annotations
 
 import argparse
@@ -8,9 +9,7 @@ import time
 from typing import Dict, Optional, Sequence
 
 import keras
-
 from config import Config
-from data import OptimizedDataLoader
 from reporting.plots import (
     plot_confusion_matrices,
     plot_model_comparison_overview,
@@ -21,6 +20,8 @@ from reporting.report import save_comprehensive_report
 from runtime import configure_gpu, configure_matplotlib, set_seed, setup_logging
 from training.trainer import SequentialTrainer
 from xai.visualize import generate_xai_visualizations
+
+from data import OptimizedDataLoader
 
 logger = logging.getLogger(__name__)
 
@@ -66,27 +67,41 @@ def run(cfg: Config, skip_xai: bool = False) -> Dict[str, dict]:
 
     if not skip_xai:
         generate_xai_visualizations(
-            results[best]["model_path"], os.path.join(cfg.data_root, "test"), data.class_names, best, cfg
+            results[best]["model_path"],
+            os.path.join(cfg.data_root, "test"),
+            data.class_names,
+            best,
+            cfg,
         )
 
     print("\n" + "=" * 80 + "\nEXECUTION SUMMARY\n" + "=" * 80)
     # FIX: sort on x[1]["accuracy"]. Original `key=lambda x: x["accuracy"]` indexed a
     # (name, dict) TUPLE with a string -> TypeError after all training had finished.
-    for rank, (name, r) in enumerate(sorted(results.items(), key=lambda x: x[1]["accuracy"], reverse=True), 1):
-        print(f"{rank}. {name}: acc={r['accuracy']:.4f} macroF1={r['macro_avg']['f1-score']:.4f} "
-              f"weightedF1={r['weighted_avg']['f1-score']:.4f} bestValLoss={r['best_val_loss']:.4f}")
+    for rank, (name, r) in enumerate(
+        sorted(results.items(), key=lambda x: x[1]["accuracy"], reverse=True), 1
+    ):
+        print(
+            f"{rank}. {name}: acc={r['accuracy']:.4f} macroF1={r['macro_avg']['f1-score']:.4f} "
+            f"weightedF1={r['weighted_avg']['f1-score']:.4f} bestValLoss={r['best_val_loss']:.4f}"
+        )
     print(f"\nSelected (lowest val loss): {best}")
-    print(f"Total time: {(time.time() - t0) / 60:.1f} min | outputs: {cfg.output_dir}/\n")
+    print(
+        f"Total time: {(time.time() - t0) / 60:.1f} min | outputs: {cfg.output_dir}/\n"
+    )
     return results
 
 
 def main(argv: Optional[Sequence[str]] = None) -> None:
     args = parse_args(argv)
     overrides = {
-        k: v for k, v in {
-            "data_root": args.data_root, "output_dir": args.output_dir,
-            "models_to_train": args.models, "epochs": args.epochs,
-        }.items() if v is not None
+        k: v
+        for k, v in {
+            "data_root": args.data_root,
+            "output_dir": args.output_dir,
+            "models_to_train": args.models,
+            "epochs": args.epochs,
+        }.items()
+        if v is not None
     }
     cfg = Config(**overrides)
     cfg.validate()

@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import time
 
+import keras
 from keras.callbacks import Callback
 
 logger = logging.getLogger(__name__)
@@ -11,7 +12,9 @@ logger = logging.getLogger(__name__)
 class WarmUpLearningRate(Callback):
     """Linear LR warm-up that actually reaches the target LR."""
 
-    def __init__(self, warmup_epochs: int, initial_lr: float, target_lr: float, verbose: int = 0):
+    def __init__(
+        self, warmup_epochs: int, initial_lr: float, target_lr: float, verbose: int = 0
+    ):
         super().__init__()
         self.warmup_epochs = warmup_epochs
         self.initial_lr = initial_lr
@@ -46,7 +49,98 @@ class ProgressCallback(Callback):
         logs = logs or {}
         logger.info(
             "%s - epoch %d (%.1fs) loss=%.4f acc=%.4f val_loss=%.4f val_acc=%.4f",
-            self.model_name, epoch + 1, time.time() - self._t0,
-            logs.get("loss", 0), logs.get("accuracy", 0),
-            logs.get("val_loss", 0), logs.get("val_accuracy", 0),
+            self.model_name,
+            epoch + 1,
+            time.time() - self._t0,
+            logs.get("loss", 0),
+            logs.get("accuracy", 0),
+            logs.get("val_loss", 0),
+            logs.get("val_accuracy", 0),
         )
+
+
+class StopAtEpoch(keras.callbacks.Callback):
+    def __init__(self, target):
+        super().__init__()
+        self.target = target
+
+    def on_epoch_end(self, epoch, logs=None):
+        if epoch + 1 >= self.target:
+            self.model.stop_training = True
+            logger.info("Stopping at epoch %d (target reached)", epoch + 1)
+
+
+class StopOnPlateau(keras.callbacks.Callback):
+    def __init__(self, patience=5, min_delta=1e-4):
+        super().__init__()
+        self.patience = patience
+        self.min_delta = min_delta
+        self.best = float("inf")
+        self.wait = 0
+
+    def on_epoch_end(self, epoch, logs=None):
+        current = logs.get("val_loss")
+
+        if current is None:
+            return
+
+        if current < self.best - self.min_delta:
+            self.best = current
+            self.wait = 0
+        else:
+            self.wait += 1
+            if self.wait >= self.patience:
+                self.model.stop_training = True
+                logger.info(
+                    "Stopping at epoch %d: no val_loss improvement for %d epochs",
+                    epoch + 1,
+                    self.patience,
+                )
+
+
+class StopOnAccPlateau(keras.callbacks.Callback):
+    """Stop when val_accuracy hasn't improved for `patience` epochs."""
+
+    def __init__(self, patience=8, min_delta=1e-4):
+        super().__init__()
+        self.patience = patience
+        self.min_delta = min_delta
+        self.best = 0.0
+        self.wait = 0
+
+    def on_epoch_end(self, epoch, logs=None):
+        logs = logs or {}
+        current = logs.get("val_accuracy")
+        if current is None:
+            return
+        if current > self.best + self.min_delta:
+            self.best = current
+            self.wait = 0
+        else:
+            self.wait += 1
+            if self.wait >= self.patience:
+                self.model.stop_training = True
+                logger.info(
+                    "Stopping at epoch %d: val_acc %.4f has not improved for %d epochs (best %.4f)",
+                    epoch + 1,
+                    current,
+                    self.patience,
+                    self.best,
+                )
+
+
+class StopWhenGood(keras.callbacks.Callback):
+    def __init__(self, target_acc=0.93):
+        super().__init__()
+        self.target = target_acc
+
+    def on_epoch_end(self, epoch, logs=None):
+        val_acc = logs.get("val_accuracy", 0)
+        if val_acc >= self.target:
+            self.model.stop_training = True
+            logger.info(
+                "Stopping at epoch %d: val_acc %.4f >= %.4f",
+                epoch + 1,
+                val_acc,
+                self.target,
+            )
