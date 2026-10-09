@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
 
-from waste_sorting.config import Config
+from config import Config
 
 logger = logging.getLogger(__name__)
 

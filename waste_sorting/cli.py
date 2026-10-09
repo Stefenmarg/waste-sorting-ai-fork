@@ -9,18 +9,18 @@ from typing import Dict, Optional, Sequence
 
 import keras
 
-from waste_sorting.config import Config
-from waste_sorting.data import OptimizedDataLoader
-from waste_sorting.reporting.plots import (
+from config import Config
+from data import OptimizedDataLoader
+from reporting.plots import (
     plot_confusion_matrices,
     plot_model_comparison_overview,
     plot_per_class_metrics,
     plot_training_curves,
 )
-from waste_sorting.reporting.report import save_comprehensive_report
-from waste_sorting.runtime import configure_gpu, configure_matplotlib, set_seed, setup_logging
-from waste_sorting.training.trainer import SequentialTrainer
-from waste_sorting.xai.visualize import generate_xai_visualizations
+from reporting.report import save_comprehensive_report
+from runtime import configure_gpu, configure_matplotlib, set_seed, setup_logging
+from training.trainer import SequentialTrainer
+from xai.visualize import generate_xai_visualizations
 
 logger = logging.getLogger(__name__)
 

@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 
-from waste_sorting.config import Config
+from config import Config
 
 logger = logging.getLogger(__name__)
 Results = Dict[str, dict]

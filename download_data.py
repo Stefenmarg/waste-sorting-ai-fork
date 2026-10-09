@@ -20,8 +20,8 @@ SPLIT_OUTPUT = "./data"
 
 # Kaggle dataset handles ("owner/dataset-name")
 KAGGLE_DATASETS = [
-    "joebeachcapital/realwaste",
-    "sumn2u/garbage-classification-v2",
+    #    "joebeachcapital/realwaste",
+    #    "sumn2u/garbage-classification-v2",
 ]
 
 # Direct links to .zip archives

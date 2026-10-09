@@ -8,7 +8,7 @@ import tensorflow as tf
 from sklearn.metrics import classification_report, confusion_matrix, precision_recall_fscore_support
 from tqdm import tqdm
 
-from waste_sorting.config import Config
+from config import Config
 
 _rng = np.random.default_rng(0)
 

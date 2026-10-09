@@ -9,9 +9,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
 
-from waste_sorting.config import Config
-from waste_sorting.data import IMG_EXTS
-from waste_sorting.xai.explainer import XAIExplainer
+from config import Config
+from data import IMG_EXTS
+from xai.explainer import XAIExplainer
 
 logger = logging.getLogger(__name__)
 

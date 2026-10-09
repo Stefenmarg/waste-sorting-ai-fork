@@ -12,7 +12,7 @@ import keras
 import tensorflow as tf
 from keras import layers
 
-from waste_sorting.config import Config
+from config import Config
 
 logger = logging.getLogger(__name__)
 

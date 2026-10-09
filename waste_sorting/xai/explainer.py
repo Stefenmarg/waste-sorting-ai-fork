@@ -10,8 +10,8 @@ import numpy as np
 import tensorflow as tf
 from lime import lime_image
 
-from waste_sorting.config import Config
-from waste_sorting.modeling import preprocessing  # noqa: F401  (registers BackbonePreprocess for load_model)
+from config import Config
+from modeling import preprocessing  # noqa: F401  (registers BackbonePreprocess for load_model)
 
 logger = logging.getLogger(__name__)
 

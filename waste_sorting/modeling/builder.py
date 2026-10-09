@@ -6,6 +6,7 @@ from typing import Tuple
 
 import keras
 import numpy as np
+from config import Config
 from keras import Model, layers
 from keras.applications import (
     ConvNeXtBase,
@@ -15,10 +16,8 @@ from keras.applications import (
     MobileNetV2,
     ResNet50,
 )
-
-from waste_sorting.config import Config
-from waste_sorting.modeling.losses import focal_loss
-from waste_sorting.modeling.preprocessing import BackbonePreprocess
+from modeling.losses import focal_loss
+from modeling.preprocessing import BackbonePreprocess
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +38,8 @@ def _log_line(line, *args, **kwargs):
 
 
 def _load_backbone(arch: str, config: Config) -> Model:
+    # arch: The keras application model used in the backbone
+
     ctor = BASE_MODELS[arch]
     shape = (*config.img_size, 3)
     if not config.pretrained:
@@ -52,10 +53,14 @@ def _load_backbone(arch: str, config: Config) -> Model:
             return model
         except Exception as e:  # network / cache errors
             last_err = e
-            logger.warning("Attempt %d/3 loading %s weights failed: %s", attempt, arch, e)
+            logger.warning(
+                "Attempt %d/3 loading %s weights failed: %s", attempt, arch, e
+            )
             time.sleep(2)
     if config.allow_random_init:
-        logger.warning("Falling back to RANDOM init for %s (allow_random_init=True)", arch)
+        logger.warning(
+            "Falling back to RANDOM init for %s (allow_random_init=True)", arch
+        )
         return ctor(include_top=False, weights=None, input_shape=shape)
     raise RuntimeError(f"Could not load pretrained weights for {arch}") from last_err
 
@@ -69,7 +74,9 @@ def compile_model(model: Model, lr: float, config: Config) -> None:
         else "sparse_categorical_crossentropy"
     )
     model.compile(
-        optimizer=keras.optimizers.Adam(learning_rate=lr, clipnorm=config.gradient_clip_value),
+        optimizer=keras.optimizers.Adam(
+            learning_rate=lr, clipnorm=config.gradient_clip_value
+        ),
         loss=loss,
         metrics=[
             "accuracy",
@@ -80,14 +87,17 @@ def compile_model(model: Model, lr: float, config: Config) -> None:
 
 def unfreeze_top_layers(base_model: Model, percent_frozen: float) -> int:
     """Unfreeze the top (1 - percent_frozen) of the backbone, keeping BatchNorm frozen."""
-    base_model.trainable = True
     cutoff = int(len(base_model.layers) * percent_frozen)
     for i, layer in enumerate(base_model.layers):
         # FIX (new): BatchNorm layers stay frozen during fine-tuning.
         # Original: every layer past the cutoff, BatchNorm included, was set trainable.
         # With a small learning rate and small batches, retraining BN scale/shift is a
         # common cause of fine-tuning accuracy collapsing right after unfreezing.
-        layer.trainable = i >= cutoff and not isinstance(layer, layers.BatchNormalization)
+        layer.trainable = i >= cutoff and not isinstance(
+            layer, layers.BatchNormalization
+        )
+    base_model.trainable = True
+
     n = sum(1 for l in base_model.layers if l.trainable)
     logger.info("Unfroze %d/%d backbone layers", n, len(base_model.layers))
     return n
@@ -95,7 +105,9 @@ def unfreeze_top_layers(base_model: Model, percent_frozen: float) -> int:
 
 def build_model(arch: str, num_classes: int, config: Config) -> Tuple[Model, Model]:
     if arch not in BASE_MODELS:
-        raise ValueError(f"Unknown architecture {arch!r}. Options: {sorted(BASE_MODELS)}")
+        raise ValueError(
+            f"Unknown architecture {arch!r}. Options: {sorted(BASE_MODELS)}"
+        )
     logger.info("Building %s...", arch)
 
     base_model = _load_backbone(arch, config)
@@ -107,10 +119,14 @@ def build_model(arch: str, num_classes: int, config: Config) -> Tuple[Model, Mod
     x = layers.GlobalAveragePooling2D()(x)
     x = layers.BatchNormalization()(x)
     x = layers.Dropout(config.dropout_rate)(x)
-    x = layers.Dense(512, activation="relu", kernel_regularizer=keras.regularizers.l2(1e-3))(x)
+    x = layers.Dense(
+        512, activation="relu", kernel_regularizer=keras.regularizers.l2(1e-3)
+    )(x)
     x = layers.BatchNormalization()(x)
     x = layers.Dropout(config.dropout_rate * 0.5)(x)
-    x = layers.Dense(256, activation="relu", kernel_regularizer=keras.regularizers.l2(1e-3))(x)
+    x = layers.Dense(
+        256, activation="relu", kernel_regularizer=keras.regularizers.l2(1e-3)
+    )(x)
     x = layers.BatchNormalization()(x)
     x = layers.Dropout(config.dropout_rate * 0.5)(x)
     outputs = layers.Dense(num_classes, activation="softmax", dtype="float32")(x)
@@ -122,5 +138,10 @@ def build_model(arch: str, num_classes: int, config: Config) -> Tuple[Model, Mod
     total = model.count_params()
     # FIX: np.prod(w.shape). Original: keras.backend.count_params(w), removed in Keras 3.
     trainable = sum(int(np.prod(w.shape)) for w in model.trainable_weights)
-    logger.info("Total params: %s | trainable: %s | frozen: %s", f"{total:,}", f"{trainable:,}", f"{total - trainable:,}")
+    logger.info(
+        "Total params: %s | trainable: %s | frozen: %s",
+        f"{total:,}",
+        f"{trainable:,}",
+        f"{total - trainable:,}",
+    )
     return model, base_model

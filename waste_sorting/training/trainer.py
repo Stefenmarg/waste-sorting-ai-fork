@@ -11,12 +11,12 @@ from typing import Any, Dict
 import keras
 from keras.callbacks import CSVLogger, EarlyStopping, ModelCheckpoint, ReduceLROnPlateau, TensorBoard
 
-from waste_sorting.config import Config
-from waste_sorting.data import Datasets
-from waste_sorting.modeling import preprocessing  # noqa: F401  (registers BackbonePreprocess for load_model)
-from waste_sorting.modeling.builder import build_model, compile_model, unfreeze_top_layers
-from waste_sorting.training.callbacks import ProgressCallback, WarmUpLearningRate
-from waste_sorting.training.evaluation import evaluate_model
+from config import Config
+from data import Datasets
+from modeling import preprocessing  # noqa: F401  (registers BackbonePreprocess for load_model)
+from modeling.builder import build_model, compile_model, unfreeze_top_layers
+from training.callbacks import ProgressCallback, WarmUpLearningRate
+from training.evaluation import evaluate_model
 
 logger = logging.getLogger(__name__)
 
