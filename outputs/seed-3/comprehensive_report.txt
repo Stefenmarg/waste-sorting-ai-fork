@@ -1,0 +1,117 @@
+====================================================================================================
+WASTE SORTING - COMPREHENSIVE REPORT
+Generated: 2026-10-12 05:11:17
+====================================================================================================
+
+CONFIGURATION:
+  data_root: ../data
+  output_dir: ../output-seed-3
+  seed: 3
+  img_size: (224, 224)
+  batch_size: 32
+  shuffle_buffer: 2048
+  models_to_train: ['ResNet50', 'EfficientNetV2B0', 'DenseNet121', 'MobileNetV2']
+  pretrained: True
+  allow_random_init: False
+  dropout_rate: 0.3
+  epochs: 50
+  phase1_epochs: 15
+  learning_rate: 0.001
+  fine_tune_lr: 1e-05
+  fine_tune_from_layer_percent: 0.8
+  warmup_epochs: 3
+  gradient_clip_value: 1.0
+  use_mixed_precision: False
+  use_class_weights: True
+  use_focal_loss: False
+  focal_loss_gamma: 2.0
+  focal_loss_alpha: 0.25
+  use_tta: False
+  tta_steps: 5
+  xai_samples_per_class: 3
+  xai_methods: ['grad_cam', 'lime', 'occlusion', 'integrated_gradients']
+  occlusion_size: 30
+  occlusion_stride: 15
+  occlusion_batch_size: 32
+  ig_steps: 50
+  lime_samples: 300
+
+Classes: cardboard, glass, metal, paper, plastic, trash
+
+SELECTED MODEL (lowest validation loss): DenseNet121
+
+MODEL COMPARISON (sorted by test accuracy):
+Model                   Accuracy   Precision  Recall     F1         ValLoss   
+----------------------------------------------------------------------------------------------------
+1. ResNet50             0.9297     0.9317     0.9297     0.9297     1.0100    
+2. DenseNet121          0.9297     0.9325     0.9297     0.9305     0.8167    
+3. EfficientNetV2B0     0.9089     0.9178     0.9089     0.9116     1.0340    
+4. MobileNetV2          0.8724     0.8819     0.8724     0.8736     1.1127    
+
+====================================================================================================
+MODEL: ResNet50
+====================================================================================================
+
+  Accuracy: 0.9297
+  Macro    P/R/F1: 0.9121 / 0.9062 / 0.9082
+  Weighted P/R/F1: 0.9317 / 0.9297 / 0.9297
+
+Class               Precision   Recall      F1          Support   
+------------------------------------------------------------------
+cardboard           1.0000      0.9180      0.9573      61        
+glass               0.9333      0.9211      0.9272      76        
+metal               0.8714      0.9839      0.9242      62        
+paper               0.9348      0.9556      0.9451      90        
+plastic             0.9714      0.9315      0.9510      73        
+trash               0.7619      0.7273      0.7442      22        
+
+====================================================================================================
+MODEL: EfficientNetV2B0
+====================================================================================================
+
+  Accuracy: 0.9089
+  Macro    P/R/F1: 0.8759 / 0.8892 / 0.8799
+  Weighted P/R/F1: 0.9178 / 0.9089 / 0.9116
+
+Class               Precision   Recall      F1          Support   
+------------------------------------------------------------------
+cardboard           0.9828      0.9344      0.9580      61        
+glass               0.9231      0.9474      0.9351      76        
+metal               0.8406      0.9355      0.8855      62        
+paper               0.9529      0.9000      0.9257      90        
+plastic             0.9848      0.8904      0.9353      73        
+trash               0.5714      0.7273      0.6400      22        
+
+====================================================================================================
+MODEL: DenseNet121
+====================================================================================================
+
+  Accuracy: 0.9297
+  Macro    P/R/F1: 0.9087 / 0.9224 / 0.9143
+  Weighted P/R/F1: 0.9325 / 0.9297 / 0.9305
+
+Class               Precision   Recall      F1          Support   
+------------------------------------------------------------------
+cardboard           0.9483      0.9016      0.9244      61        
+glass               0.9595      0.9342      0.9467      76        
+metal               0.9091      0.9677      0.9375      62        
+paper               0.9326      0.9222      0.9274      90        
+plastic             0.9718      0.9452      0.9583      73        
+trash               0.7308      0.8636      0.7917      22        
+
+====================================================================================================
+MODEL: MobileNetV2
+====================================================================================================
+
+  Accuracy: 0.8724
+  Macro    P/R/F1: 0.8551 / 0.8554 / 0.8517
+  Weighted P/R/F1: 0.8819 / 0.8724 / 0.8736
+
+Class               Precision   Recall      F1          Support   
+------------------------------------------------------------------
+cardboard           0.9444      0.8361      0.8870      61        
+glass               0.9688      0.8158      0.8857      76        
+metal               0.7662      0.9516      0.8489      62        
+paper               0.8817      0.9111      0.8962      90        
+plastic             0.9028      0.8904      0.8966      73        
+trash               0.6667      0.7273      0.6957      22        

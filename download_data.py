@@ -20,8 +20,8 @@ SPLIT_OUTPUT = "./data"
 
 # Kaggle dataset handles ("owner/dataset-name")
 KAGGLE_DATASETS = [
-    "joebeachcapital/realwaste",
-    "sumn2u/garbage-classification-v2",
+    #    "joebeachcapital/realwaste",
+    #    "sumn2u/garbage-classification-v2",
 ]
 
 # Direct links to .zip archives
@@ -41,8 +41,8 @@ CLASS_MAP: Dict[str, str] = {
     "paper": "paper",
     "plastic": "plastic",
     "trash": "trash",
-#    "food_organics": "organic",   # example of renaming
-#    "vegetation": "organic",      # example of merging into one class
+    #    "food_organics": "organic",   # example of renaming
+    #    "vegetation": "organic",      # example of merging into one class
 }
 
 # File types treated as images when splitting
@@ -52,6 +52,7 @@ IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png"}
 # --------------------------------------------------------------------------- #
 # Downloading
 # --------------------------------------------------------------------------- #
+
 
 def download_kaggle_datasets(kaggle_datasets: List[str]) -> List[Path]:
     """
@@ -118,10 +119,12 @@ def download_remote_datasets(remote_datasets: List[str]) -> List[Path]:
 # Dataset discovery & splitting
 # --------------------------------------------------------------------------- #
 
+
 def _list_images(folder: Path) -> List[Path]:
     """Return all image files directly inside `folder` (case-insensitive)."""
     return [
-        f for f in folder.iterdir()
+        f
+        for f in folder.iterdir()
         if f.is_file() and f.suffix.lower() in IMAGE_EXTENSIONS
     ]
 
@@ -139,8 +142,7 @@ def find_class_root(dataset_dir: Path) -> Optional[Path]:
 
     for candidate in candidates:
         class_folders = [
-            d for d in candidate.iterdir()
-            if d.is_dir() and _list_images(d)
+            d for d in candidate.iterdir() if d.is_dir() and _list_images(d)
         ]
         if len(class_folders) >= 2:
             return candidate
@@ -226,6 +228,7 @@ def split_dataset(
 # Entry point
 # --------------------------------------------------------------------------- #
 
+
 def main() -> None:
     print("=" * 60)
     print("Waste Dataset Preparation")
@@ -293,8 +296,7 @@ def main() -> None:
         split_path = Path(SPLIT_OUTPUT) / split
         if split_path.exists():
             total = sum(
-                1 for f in split_path.rglob("*")
-                if f.suffix.lower() in IMAGE_EXTENSIONS
+                1 for f in split_path.rglob("*") if f.suffix.lower() in IMAGE_EXTENSIONS
             )
             print(f"\n{split.capitalize()}: {total} images")
 
